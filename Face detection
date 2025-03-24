@@ -1,1 +1,75 @@
-this code helps to read the face
+import cv2
+import face_recognition
+import numpy as np
+
+
+ESP32_CAM_URL = "http://192.168.243.37:81/stream"
+
+
+known_face_encodings = []
+known_face_names = []
+
+
+def load_known_faces():
+    global known_face_encodings, known_face_names
+
+
+    known_faces = {
+        "person1.jpg": "Prabir",
+        "person2.jpg": "Parambrata",
+        "person3.jpg": "Rupankar",
+        "person4.jpg": "Protanu",
+        "person5.jpg": "Ritesh",
+        "person6.jpg": "Alok",
+    }
+
+    for img_path, name in known_faces.items():
+        img = face_recognition.load_image_file(img_path)
+        encoding = face_recognition.face_encodings(img)[0]  
+        known_face_encodings.append(encoding)
+        known_face_names.append(name)
+
+
+load_known_faces()
+
+
+cap = cv2.VideoCapture(ESP32_CAM_URL)
+
+if not cap.isOpened():
+    print("Error: Could not connect to ESP32-CAM stream")
+    exit()
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to retrieve frame")
+        break
+
+   
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+
+    face_locations = face_recognition.face_locations(rgb_frame)
+    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+
+
+    for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+        # Compare detected face with known faces
+        matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+        name = "Unknown"
+
+        if True in matches:
+            match_index = np.argmin(face_recognition.face_distance(known_face_encodings, face_encoding))
+            name = known_face_names[match_index]
+
+
+        cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+        cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+    cv2.imshow("ESP32-CAM Face Recognition", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
